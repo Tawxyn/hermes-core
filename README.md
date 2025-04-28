@@ -1,5 +1,6 @@
 ### Instructions
 Pending changes as development goes.
+https://pypi.org/project/openai-whisper/
 pip install -U openai-whisper
 ```
 # on Ubuntu or Debian
