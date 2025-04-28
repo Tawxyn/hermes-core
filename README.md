@@ -1,8 +1,10 @@
 ### Instructions
 Pending changes as development goes.
 pip install -U openai-whisper
+```
 # on Ubuntu or Debian
 sudo apt update && sudo apt install ffmpeg
+```
 ```
 ## on Arch Linux
 sudo pacman -S ffmpeg
