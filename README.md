@@ -1,4 +1,5 @@
 ### Instructions
+SELF NOTES:
 Pending changes as development goes.
 https://pypi.org/project/openai-whisper/
 pip install -U openai-whisper
@@ -21,4 +22,8 @@ choco install ffmpeg
 ```
 ## on Windows using Scoop (https://scoop.sh/)
 scoop install ffmpeg
+```
+If you are using Linux you might need the OirtAudio C Library
+```
+sudo apt-get install libportaudio2
 ```
