@@ -14,15 +14,20 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(
 sample_rate = 44100  
 chunk_duration = 5
 
-def record_audio():
+audio_queue = []
+async def record_audio():
     print("Recording audio...")
-    recording = sd.rec(int(chunk_duration * sample_rate), samplerate=sample_rate, channels=1, dtype="int16")
+    recording = await asyncio.to_thread(sd.rec(int(chunk_duration * sample_rate), samplerate=sample_rate, channels=1, dtype="int16"))
     sd.wait()
-    return recording
+    audio_queue.append(recording)
 
-async def write_audio(recording):
-    print("Saving audio to file...")
-    wav.write("output_audio.wav", sample_rate, recording)
+async def write_audio():
+    if audio_queue: 
+        print("Saving audio to file...")
+        recording = audio_queue.pop(0)
+        wav.write("output_audio.wav", sample_rate, recording)
+    else:
+        return
     
 async def transcribe():
     print("Transcribing audio...")
@@ -48,8 +53,8 @@ async def main():
 
     while True:
         try: 
-            recording = await asyncio.to_thread(record_audio) 
-            await write_audio(recording)
+            await record_audio()
+            await write_audio()
             await transcribe()
         except asyncio.CancelledError:
             break
