@@ -13,27 +13,39 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(
 # Vars
 sample_rate = 44100  
 chunk_duration = 5
-
+# Queues
 audio_queue = []
+transcribe_queue = []
+
+# Model
+model = whisper.load_model("tiny")
+
 async def record_audio():
     print("Recording audio...")
-    recording = await asyncio.to_thread(sd.rec(int(chunk_duration * sample_rate), samplerate=sample_rate, channels=1, dtype="int16"))
-    sd.wait()
+    recording = await asyncio.to_thread(record_block)
     audio_queue.append(recording)
+
+def record_block():
+    recording = sd.rec(int(chunk_duration * sample_rate), samplerate=sample_rate, channels=1, dtype="int16")
+    sd.wait()
+    return recording
+
 
 async def write_audio():
     if audio_queue: 
         print("Saving audio to file...")
         recording = audio_queue.pop(0)
-        wav.write("output_audio.wav", sample_rate, recording)
+        transcribe_queue.append(wav.write("output_audio.wav", sample_rate, recording))
     else:
         return
     
 async def transcribe():
     print("Transcribing audio...")
-    model = whisper.load_model("tiny")
-    result = model.transcribe("output_audio.wav")
-    print(result["text"])
+    if transcribe_queue:
+        result = model.transcribe("output_audio.wav")
+        print(result["text"])
+    else:
+        return
 
 async def shutdown(signal, loop):
     logging.info(f"Recieved exit signal {signal.name} ... ")
@@ -50,17 +62,17 @@ async def main():
 
     for s in (signal.SIGHUP, signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(s, lambda s=s: asyncio.create_task(shutdown(s, loop)))
+    try:
+        while True:
+            try:
+                await record_audio()
+                await write_audio()
+                await transcribe()
+            except asyncio.CancelledError:
+                break
 
-    while True:
-        try: 
-            await record_audio()
-            await write_audio()
-            await transcribe()
-        except asyncio.CancelledError:
-            break
-
-        finally:
-            logging.info("Successfully shutdown Hermes service")
+    finally:
+        logging.info("Successfully shutdown Hermes service")
 
 if __name__ == "__main__":
     try:
