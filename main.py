@@ -1,5 +1,6 @@
 import asyncio
 import signal
+import time
 import warnings
 import logging
 import whisper
@@ -14,38 +15,50 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(
 sample_rate = 44100  
 chunk_duration = 5
 # Queues
-audio_queue = []
-transcribe_queue = []
+audio_queue = asyncio.Queue(maxsize=10)
+transcribe_queue = asyncio.Queue(maxsize=10)
 
 # Model
 model = whisper.load_model("tiny")
 
+# ---------- RECORD ----------
 async def record_audio():
     print("Recording audio...")
     recording = await asyncio.to_thread(record_block)
-    audio_queue.append(recording)
+    await audio_queue.put(recording)
 
 def record_block():
     recording = sd.rec(int(chunk_duration * sample_rate), samplerate=sample_rate, channels=1, dtype="int16")
     sd.wait()
     return recording
 
+async def record_loop():
+    while True:
+        await record_audio()
 
+# ---------- WRITE ----------
 async def write_audio():
-    if audio_queue: 
-        print("Saving audio to file...")
-        recording = audio_queue.pop(0)
-        transcribe_queue.append(wav.write("output_audio.wav", sample_rate, recording))
-    else:
-        return
-    
+    recording = await audio_queue.get()
+    filename = f"output_audio{int(time.time())}.wav"
+    wav.write(filename, sample_rate, recording)
+    await transcribe_queue.put(filename)
+    logging.info("Saved and queued {filename} ...")
+
+async def write_loop():
+    while True:
+        await write_audio()
+
+# ---------- TRANSCRIBE ----------
 async def transcribe():
-    print("Transcribing audio...")
-    if transcribe_queue:
-        result = model.transcribe("output_audio.wav")
-        print(result["text"])
-    else:
-        return
+    filename = await transcribe_queue.get()
+    logging.info("Transcribing {filename} ... ")
+    result = model.transcribe(filename)
+    print(result["text"])
+
+async def transcribe_loop():
+    while True:
+        await transcribe()
+
 
 async def shutdown(signal, loop):
     logging.info(f"Recieved exit signal {signal.name} ... ")
@@ -62,17 +75,14 @@ async def main():
 
     for s in (signal.SIGHUP, signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(s, lambda s=s: asyncio.create_task(shutdown(s, loop)))
-    try:
-        while True:
-            try:
-                await record_audio()
-                await write_audio()
-                await transcribe()
-            except asyncio.CancelledError:
-                break
+   
+    record_task = asyncio.create_task(record_loop())
+    write_task = asyncio.create_task(write_loop())
+    transcribe_task = asyncio.create_task(transcribe_loop())
 
-    finally:
-        logging.info("Successfully shutdown Hermes service")
+    await asyncio.gather(record_task, write_task, transcribe_task)
+    
+    logging.info("Successfully shutdown hermes services")
 
 if __name__ == "__main__":
     try:
