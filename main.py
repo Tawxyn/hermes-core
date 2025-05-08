@@ -1,3 +1,4 @@
+from ring_buffer import RingBuffer
 import asyncio
 import os
 import signal
@@ -17,13 +18,15 @@ warnings.filterwarnings('ignore', category=UserWarning)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s')
 # Vars
 sample_rate = 44100  
-chunk_duration = 5
+chunk_duration = 2
 # Queues
 audio_queue = asyncio.Queue(maxsize=10)
 transcribe_queue = asyncio.Queue(maxsize=10)
 
 # Model
 model = whisper.load_model("tiny")
+
+buffer = RingBuffer(max_chunks=5)
 
 # ---------- RECORD ----------
 async def record_audio():
@@ -42,7 +45,7 @@ async def record_loop():
             await record_audio()
         except:
             asyncio.CancelledError
-            logging.info("record_audio recived cancelled error...")
+            logging.info("✅ record_loop successfully interupted")
             break
 
 # ---------- WRITE ----------
@@ -58,7 +61,7 @@ async def write_loop():
             await write_audio()
         except:
             asyncio.CancelledError
-            logging.info("write_audio recived cancelled error...")
+            logging.info("✅ write_loop successfully interupted")
             break
 
 # ---------- TRANSCRIBE ----------
@@ -73,8 +76,10 @@ async def transcribe_loop():
             await transcribe()
         except:
             asyncio.CancelledError
-            logging.info("transcribe_loop recived cancelled error...")
+            logging.info("✅ transcribe_loop successfully interupted")
             break
+
+#  ---------- POSTRUN ----------
 
 def delete_wav_files(current_directory):
     wav_files = glob.glob(os.path.join(current_directory, "*.wav"))
